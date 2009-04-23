@@ -38,8 +38,8 @@ start_link(Exe,Hosts) ->
     gen_server:start_link(?MODULE,[{Exe,Hosts2}],[]).
 
 -spec get_slaves(pid()) -> [pid()].
-get_slaves(Server) ->
-    gen_server:call(Server,get_slaves).
+get_slaves(MasterPid) ->
+    gen_server:call(MasterPid,get_slaves).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% callbacks
