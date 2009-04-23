@@ -29,12 +29,11 @@ test_piperl_master() ->
 test_piperl() ->
     {ok,Pid} = piperl:start_link(9876),
     piperl:open(Pid,echo,echo_exe(),[{node(),3}]),
-    error = piperl:find(Pid,not_echo),
-    {ok,Master} = piperl:find(Pid,echo),
-    Slaves = piperl_master:get_slaves(Master),
+    not_found = piperl:find_slaves(Pid,not_echo),
+    Slaves = piperl:find_slaves(Pid,echo),
     ok = msg_slaves(Slaves).
 
-msg_slaves(Slaves) ->
+msg_slaves(Slaves) when is_list(Slaves) ->
     Msg = echo_msg(),
     [begin
          piperl_slave:send(Slave,Msg),

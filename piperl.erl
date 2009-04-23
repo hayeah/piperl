@@ -5,7 +5,8 @@
 
 -export([start_link/1,
          open/4,
-         find/2
+         find/2,
+         find_slaves/2
         ]).
 
 -export([init/1,
@@ -34,9 +35,16 @@ open(Pid,Name,Exe,Hosts) ->
 
 %close
 
--spec find(atom() | pid(),atom()) -> pid() | 'error'.
+-spec find(atom() | pid(),atom()) -> pid() | not_found.
 find(PiperlPid,Name) ->
     gen_server:call(PiperlPid,{find,Name}).
+
+-spec find_slaves(atom() | pid(),atom()) -> [pid()] | not_found.
+find_slaves(PiperlPid,Name) ->
+    case piperl:find(PiperlPid,Name) of
+        not_found -> not_found;
+        Master -> piperl_master:get_slaves(Master)
+    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% gen_sever call backs
@@ -49,14 +57,14 @@ init([Port]) ->
 %% gen_server API internal to piperl
 handle_call({open,Name,Exe,_Hosts},_From,S) ->
     case find_master(S,Name) of
-        {ok,_} -> {reply,{error,pipe_exists,Name},S};
-        error ->
+        not_found ->
             case piperl_master:start_link(Exe) of
                 {ok,Pid} ->
                     Pipes2 = dict:store(Name,Pid,S#piperl.pipes),
                     {reply,ok,S#piperl{pipes=Pipes2}};
                 Err -> {reply,{error,Err},S}
-            end
+            end;
+        _ -> {reply,{error,pipe_exists,Name},S}
     end;
 handle_call({find,Name},_From,S) ->
     {reply,find_master(S,Name),S}.
@@ -75,6 +83,10 @@ code_change(_OldVsn,S,_Extra) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% internal functions
 
+-spec find_master(piperl(),atom()) -> pid() | 'not_found'.
 find_master(S,Name) ->
-    dict:find(Name,S#piperl.pipes).
+    case dict:find(Name,S#piperl.pipes) of
+        {ok,Pid} -> Pid;
+        error -> not_found
+    end.
     
