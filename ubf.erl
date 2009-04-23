@@ -9,6 +9,7 @@
 
 -import(lists, [foldl/3, reverse/1, map/2, seq/2, sort/1]).
 
+
 bug() ->
     C = decode("{'abc"),
     decode("d'}$", C).
@@ -102,7 +103,7 @@ get_stuff([], Stop, L, Stack, Dict) ->
 		   get_stuff(I, Stop, L, Stack, Dict) end}.
 
 collect_binary(0, T, L, Stack, Dict) ->
-    expect_tilde(T, push(list_to_binary(L),Stack), Dict);
+    expect_tilde(T, push(list_to_binary(reverse(L)),Stack), Dict);
 collect_binary(N, [H|T], L, Stack, Dict) ->
     collect_binary(N-1, T, [H|L], Stack, Dict);
 collect_binary(N, [], L, Stack, Dict) ->
