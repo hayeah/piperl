@@ -60,16 +60,9 @@ write(S,Data) when is_binary(Data) ->
     erlang:port_command(S#slave.port,ubf:encode(Data)).
 
 read(S) ->
-    Str = binary_to_list(receive_bin(S)),
-    read(S,Str,false).
-read(S,Str,Cont) ->
-    R = if Cont == false -> ubf:decode(Str);
-           true -> ubf:decode(Str,Cont)
-        end,
-    case R of
+    case piperl_util:decode_ubf_stream(fun () -> receive_bin(S) end) of
         {done,Data,[]} -> Data;
-        {done,Data,LeftOver} -> erlang:error({left_over,Data,LeftOver});
-        {more,Cont} -> read(S,binary_to_list(receive_bin(S)),Cont)
+        {done,Data,LeftOver} -> erlang:error({left_over,Data,LeftOver})
     end.
 
 receive_bin(S) ->
