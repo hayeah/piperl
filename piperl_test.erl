@@ -27,7 +27,7 @@ test_piperl_master() ->
     ok = msg_slaves(Slaves).
 
 test_piperl() ->
-    {ok,Pid} = piperl:start_link(9876),
+    {ok,Pid} = piperl:start_link(),
     piperl:open(Pid,echo,echo_exe(),[{node(),3}]),
     not_found = piperl:find_slaves(Pid,not_echo),
     Slaves = piperl:find_slaves(Pid,echo),
@@ -50,7 +50,7 @@ get_msgs(Timeout) ->
     get_msgs(Timeout,[]).
 get_msgs(Timeout,Acc) ->
     receive
-        #msg{data=Bin} -> get_msgs(Timeout,[Bin|Acc])
+        {slave_out,#msg{data=Bin}} -> get_msgs(Timeout,[Bin|Acc])
     after Timeout -> lists:reverse(Acc)
     end.
     

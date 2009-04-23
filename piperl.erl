@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 
--export([start_link/1,
+-export([start_link/0,
          open/4,
          find/2,
          find_slaves/2
@@ -17,17 +17,16 @@
          code_change/3]).
 
 -record(piperl,
-        {pipes, %% dict of pipe names to piperl_master pids
-         port
+        {pipes %% dict of pipe names to piperl_master pids
         }).
--type piperl() :: #piperl{pipes::dict(),port::non_neg_integer()}.
+-type piperl() :: #piperl{pipes::dict()}.
 
 
 -type hosts_spec() :: [{node(),non_neg_integer()} | node()].
 
--spec start_link(non_neg_integer()) -> {'ok',pid()}.
-start_link(Port) ->
-    gen_server:start_link({local,?MODULE},?MODULE,[Port],[]).
+-spec start_link() -> {'ok',pid()}.
+start_link() ->
+    gen_server:start_link({local,?MODULE},?MODULE,[],[]).
 
 -spec open(atom() | pid(), atom(),exe(),hosts_spec()) -> 'ok' | {'error',_}.
 open(Pid,Name,Exe,Hosts) ->
@@ -50,9 +49,8 @@ find_slaves(PiperlPid,Name) ->
 %% gen_sever call backs
 
 -spec init([non_neg_integer()]) -> {ok,piperl()}.
-init([Port]) ->
-    % spawn_link(fun () -> socket_listen(Port) end),
-    {ok,#piperl{pipes=dict:new(),port=Port}}.
+init([]) ->
+    {ok,#piperl{pipes=dict:new()}}.
 
 %% gen_server API internal to piperl
 handle_call({open,Name,Exe,_Hosts},_From,S) ->

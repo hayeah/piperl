@@ -43,6 +43,7 @@
          handler %% where to send back result
         }).
 
+-type msg() :: #msg{data::binary()}.
 
 %% types of piperl messages at the interface
 %% data message

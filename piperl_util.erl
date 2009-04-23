@@ -26,5 +26,5 @@ decode_ubf_stream(F,Str,UbfCont) ->
         end,
     case R of
         {more,UbfCont2} -> decode_ubf_stream(F,F(),UbfCont2);
-        _ -> R
+        {done,Data,Excess} -> {Data,Excess}
     end.

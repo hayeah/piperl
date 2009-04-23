@@ -37,7 +37,7 @@ init([Exe]) ->
 handle_cast({slave_in,Msg=#msg{data=Data,handler=Handler}},S) ->
     write(S,Data),
     R = read(S), %% blocks
-    Handler ! Msg#msg{data=R},
+    Handler ! {slave_out,Msg#msg{data=R}},
     {noreply,S}.
 
 handle_call(_,_,_) ->
@@ -61,8 +61,8 @@ write(S,Data) when is_binary(Data) ->
 
 read(S) ->
     case piperl_util:decode_ubf_stream(fun () -> receive_bin(S) end) of
-        {done,Data,[]} -> Data;
-        {done,Data,LeftOver} -> erlang:error({left_over,Data,LeftOver})
+        {Data,[]} -> Data;
+        {Data,LeftOver} -> erlang:error({left_over,Data,LeftOver})
     end.
 
 receive_bin(S) ->
