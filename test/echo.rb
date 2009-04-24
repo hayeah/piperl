@@ -54,7 +54,7 @@ class Piperl
   end
 
   def write(data)
-    data = data.to_s
+    data = "#{Process.pid}==#{data.to_s}"
     @o << data.size
     @o.putc ?~
     @o << data
