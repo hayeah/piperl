@@ -26,7 +26,7 @@
 
 -spec start_link() -> {'ok',pid()}.
 start_link() ->
-    gen_server:start_link({local,?MODULE},?MODULE,[],[]).
+    gen_server:start_link(?MODULE,[],[]).
 
 -spec open(atom() | pid(), atom(),exe(),hosts_spec()) -> 'ok' | {'error',_}.
 open(Pid,Name,Exe,Hosts) ->
@@ -53,10 +53,10 @@ init([]) ->
     {ok,#piperl{pipes=dict:new()}}.
 
 %% gen_server API internal to piperl
-handle_call({open,Name,Exe,_Hosts},_From,S) ->
+handle_call({open,Name,Exe,Hosts},_From,S) ->
     case find_master(S,Name) of
         not_found ->
-            case piperl_master:start_link(Exe) of
+            case piperl_master:start_link(Exe,Hosts) of
                 {ok,Pid} ->
                     Pipes2 = dict:store(Name,Pid,S#piperl.pipes),
                     {reply,ok,S#piperl{pipes=Pipes2}};
