@@ -45,8 +45,12 @@ socket_read_loop(Sock,SocketWriter,Client,LeftOver) ->
     {UBF,LeftOver2} = piperl_util:decode_ubf_stream(
                         fun () -> socket_receive(Sock) end,LeftOver),
     case UBF of
-        {'send',Name,Data} when is_atom(Name), is_list(Data) or is_binary(Data) ->
-            Bin = iolist_to_binary(Data),
+        {'send',Name,Data} when is_atom(Name) ->
+            Bin =
+                case Data of
+                    {'#S',Str} -> iolist_to_binary(Str);
+                    B -> B
+                end,
             piperl_client:send(Client,Name,#msg{data=Bin,handler=SocketWriter})
     end,
     socket_read_loop(Sock,SocketWriter,Client,LeftOver2).

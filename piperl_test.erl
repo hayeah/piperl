@@ -52,11 +52,11 @@ piperl_client_test() ->
 piperl_tcp_server_test() ->
     {ok,Piperl} = piperl:start(),
     link(Piperl),
-    piperl:open(Piperl,echo,echo_exe(),[{node(),3}]),
+    piperl:open(Piperl,echo,echo_exe(),[{node(),1}]),
     TcpServer = piperl_tcp_server:start(9876,Piperl),
     link(TcpServer),
     {ok,Socket} = gen_tcp:connect("localhost",9876,[binary,{active,false}]),
-    gen_tcp:send(Socket,<<"{'send'  'echo' 7~tcp_msg~}$\n\n\n  {'send' 'echo' 8~tcp_msg2~}$\n">>),
+    gen_tcp:send(Socket,<<"{'send'  'echo' 7~tcp_msg~}$\n\n\n  {'send' 'echo' \"tcp_msg2\"}$\n">>),
     {Bin,Excess} = piperl_util:decode_ubf_stream(
                      fun () -> {ok,TBin} = gen_tcp:recv(Socket,0), TBin end),
     {Bin2,_} = piperl_util:decode_ubf_stream(
