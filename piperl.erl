@@ -2,8 +2,8 @@
 -include("piperl.hrl").
 -behaviour(gen_server).
 
-
--export([start_link/0,
+-export([start/0,
+         start/1,
          open/4,
          find/2,
          find_slaves/2
@@ -24,9 +24,13 @@
 
 -type hosts_spec() :: [{node(),non_neg_integer()} | node()].
 
--spec start_link() -> {'ok',pid()}.
-start_link() ->
-    gen_server:start_link(?MODULE,[],[]).
+-spec start() -> {'ok',pid()} | {'error',_}.
+start() ->
+    gen_server:start(?MODULE,[],[]).
+
+-spec start({'local'|'global',atom()}) -> {'ok',pid()} | {'error',_}.
+start(Name) ->
+    gen_server:start(Name,?MODULE,[],[]).
 
 -spec open(atom() | pid(), atom(),exe(),hosts_spec()) -> 'ok' | {'error',_}.
 open(Pid,Name,Exe,Hosts) ->

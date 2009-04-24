@@ -56,8 +56,9 @@ code_change(_OldVsn,S,_Extra) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Internal Functions
 
-write(S,Data) when is_binary(Data) ->
-    erlang:port_command(S#slave.port,ubf:encode(Data)).
+write(S,Data) when is_list(Data) or is_binary(Data) ->
+    Bin = iolist_to_binary(Data),
+    erlang:port_command(S#slave.port,ubf:encode(Bin)).
 
 read(S) ->
     case piperl_util:decode_ubf_stream(fun () -> receive_bin(S) end) of
