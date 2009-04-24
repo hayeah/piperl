@@ -6,101 +6,101 @@
 
 
 test() ->
-    piperl_slave_test(),
-    piperl_master_test(),
-    piperl_test(),
-    piperl_client_test(),
-    piperl_tcp_server_test(),
-    exit(success).
+  piperl_slave_test(),
+  piperl_master_test(),
+  piperl_test(),
+  piperl_client_test(),
+  piperl_tcp_server_test(),
+  exit(success).
 
 piperl_slave_test() ->
-    {ok,Slave}=piperl_slave:start_link(echo_exe()),
-    Msg = echo_msg(),
-    piperl_slave:send(Slave,Msg),
-    piperl_slave:send(Slave,Msg),
-    piperl_slave:send(Slave,Msg),
-    Rs = get_msgs(),
-    ?assertEqual(3,  length(Rs)),
-    lists:foreach(fun ({_From,Bin}) -> ?assertEqual(Msg#msg.data,Bin) end, Rs).
+  {ok,Slave}=piperl_slave:start_link(echo_exe()),
+  Msg = echo_msg(),
+  piperl_slave:send(Slave,Msg),
+  piperl_slave:send(Slave,Msg),
+  piperl_slave:send(Slave,Msg),
+  Rs = get_msgs(),
+  ?assertEqual(3,  length(Rs)),
+  lists:foreach(fun ({_From,Bin}) -> ?assertEqual(Msg#msg.data,Bin) end, Rs).
 
 piperl_master_test() ->
-    % start three slave instances
-    {ok,Master} = piperl_master:start_link(echo_exe(),[{node(),3}]),
-    Slaves = piperl_master:get_slaves(Master),
-    msg_slaves(Slaves).
+                                                % start three slave instances
+  {ok,Master} = piperl_master:start_link(echo_exe(),[{node(),3}]),
+  Slaves = piperl_master:get_slaves(Master),
+  msg_slaves(Slaves).
 
 piperl_test() ->
-    {ok,Piperl} = piperl:start(),
-    link(Piperl),
-    piperl:open(Piperl,echo,echo_exe(),[{node(),3}]),
-    not_found = piperl:find_slaves(Piperl,not_echo),
-    Slaves = piperl:find_slaves(Piperl,echo),
-    ?assertEqual(3,length(Slaves)),
-    msg_slaves(Slaves).
+  {ok,Piperl} = piperl:start(),
+  link(Piperl),
+  piperl:open(Piperl,echo,echo_exe(),[{node(),3}]),
+  not_found = piperl:find_slaves(Piperl,not_echo),
+  Slaves = piperl:find_slaves(Piperl,echo),
+  ?assertEqual(3,length(Slaves)),
+  msg_slaves(Slaves).
 
 piperl_client_test() ->
-    {ok,Piperl} = piperl:start(),
-    link(Piperl),
-    piperl:open(Piperl,echo,echo_exe(),[{node(),3}]),
-    {ok,Client} = piperl_client:start_link(Piperl),
-    Bin = <<"client test">>,
-    piperl_client:send(Client,echo,echo_msg(Bin)),
-    piperl_client:send(Client,echo,echo_msg(Bin)),
-    piperl_client:send(Client,echo,echo_msg(Bin)),
-    [begin ?assertMatch(Bin,Bin2) end || {_From,Bin2} <- get_msgs()].
+  {ok,Piperl} = piperl:start(),
+  link(Piperl),
+  piperl:open(Piperl,echo,echo_exe(),[{node(),3}]),
+  {ok,Client} = piperl_client:start_link(Piperl),
+  Bin = <<"client test">>,
+  piperl_client:send(Client,echo,echo_msg(Bin)),
+  piperl_client:send(Client,echo,echo_msg(Bin)),
+  piperl_client:send(Client,echo,echo_msg(Bin)),
+  [begin ?assertMatch(Bin,Bin2) end || {_From,Bin2} <- get_msgs()].
 
 piperl_tcp_server_test() ->
-    {ok,Piperl} = piperl:start(),
-    link(Piperl),
-    piperl:open(Piperl,echo,echo_exe(),[{node(),1}]),
-    TcpServer = piperl_tcp_server:start(9876,Piperl),
-    link(TcpServer),
-    {ok,Socket} = gen_tcp:connect("localhost",9876,[binary,{active,false}]),
-    gen_tcp:send(Socket,<<"{'send'  'echo' 7~tcp_msg~}$\n\n\n  {'send' 'echo' \"tcp_msg2\"}$\n">>),
-    {Bin,Excess} = piperl_util:decode_ubf_stream(
-                     fun () -> {ok,TBin} = gen_tcp:recv(Socket,0), TBin end),
-    {Bin2,_} = piperl_util:decode_ubf_stream(
-                 fun () -> {ok,TBin} = gen_tcp:recv(Socket,0), TBin end,
-                 Excess),
-    ?assertMatch({_From,<<"tcp_msg">>},parse_msg(Bin)),
-    ?assertMatch({_From,<<"tcp_msg2">>},parse_msg(Bin2)).
+  {ok,Piperl} = piperl:start(),
+  link(Piperl),
+  piperl:open(Piperl,echo,echo_exe(),[{node(),1}]),
+  TcpServer = piperl_tcp_server:start(9876,Piperl),
+  link(TcpServer),
+  {ok,Socket} = gen_tcp:connect("localhost",9876,[binary,{active,false}]),
+  gen_tcp:send(Socket,<<"{'send'  'echo' 7~tcp_msg~}$\n\n\n  {'send' 'echo' \"tcp_msg2\"}$\n">>),
+  {Bin,Excess} = piperl_util:decode_ubf_stream(
+                   fun () -> {ok,TBin} = gen_tcp:recv(Socket,0), TBin end),
+  {Bin2,_} = piperl_util:decode_ubf_stream(
+               fun () -> {ok,TBin} = gen_tcp:recv(Socket,0), TBin end,
+               Excess),
+  ?assertMatch({_From,<<"tcp_msg">>},parse_msg(Bin)),
+  ?assertMatch({_From,<<"tcp_msg2">>},parse_msg(Bin2)).
 
 msg_slaves(Slaves) when is_list(Slaves) ->
-    Msg = echo_msg(),
-    [begin
-         piperl_slave:send(Slave,Msg)
-     end
-     || Slave <- Slaves],
-    Rs = get_msgs(),
-    NMsgs = length(Slaves),
-    ?assertEqual(NMsgs,length(Rs)),
-    [?assertEqual(Msg#msg.data,Bin) || {_From,Bin} <-  Rs].
+  Msg = echo_msg(),
+  [begin
+     piperl_slave:send(Slave,Msg)
+   end
+   || Slave <- Slaves],
+  Rs = get_msgs(),
+  NMsgs = length(Slaves),
+  ?assertEqual(NMsgs,length(Rs)),
+  [?assertEqual(Msg#msg.data,Bin) || {_From,Bin} <-  Rs].
 
 get_msgs() ->
-    timer:sleep(100),
-    get_msgs([]).
+  timer:sleep(100),
+  get_msgs([]).
 get_msgs(Acc) ->
-    case get_msg() of
-        none -> Acc;
-        R -> get_msgs([R|Acc])
-    end.
+  case get_msg() of
+    none -> Acc;
+    R -> get_msgs([R|Acc])
+  end.
 
 -spec get_msg() -> {string(),string()} | none.
 get_msg() ->
-    receive
-        {slave_out,#msg{data=Bin}} -> parse_msg(Bin)
-    after 0 -> none
-    end.
+  receive
+    {slave_out,#msg{data=Bin}} -> parse_msg(Bin)
+  after 0 -> none
+  end.
 
 parse_msg(Bin) ->
-    {match,[From,Data]} = re:run(Bin,"(\\d+)==(.*)",[{capture,[1,2],binary}]),
-    {From,Data}.
-    
+  {match,[From,Data]} = re:run(Bin,"(\\d+)==(.*)",[{capture,[1,2],binary}]),
+  {From,Data}.
+
 
 echo_exe() ->
-    #exe{bin="ruby test/echo.rb"}.
+  #exe{bin="ruby test/echo.rb"}.
 
 echo_msg() ->
-    echo_msg(<<"echo msg">>).
+  echo_msg(<<"echo msg">>).
 echo_msg(Bin) ->
-    #msg{handler=self(),data=Bin}.
+  #msg{handler=self(),data=Bin}.
