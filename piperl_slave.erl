@@ -58,6 +58,7 @@ code_change(_OldVsn,S,_Extra) ->
 
 write(S,Data) when is_list(Data) or is_binary(Data) ->
   Bin = iolist_to_binary(Data),
+  %% data disappears if port is closed (which is fine)
   erlang:port_command(S#slave.port,ubf:encode(Bin)).
 
 read(S) ->
@@ -69,6 +70,7 @@ read(S) ->
 receive_bin(S) ->
   Port = S#slave.port,
   receive
-    {Port,{data,Bin}} -> Bin
-  after S#slave.timeout -> erlang:error("timeout")
+    {Port,{data,Bin}} -> Bin;
+    {Port,closed} -> erlang:error(port_closed)
+  after S#slave.timeout -> erlang:error(timeout)
   end.

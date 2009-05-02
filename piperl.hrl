@@ -18,20 +18,21 @@
 
 -record(master,
         {exe,
-         %% remote hosts available to spawn slaves
-         %%%% specifies how many slaves are allowed on a node
+         supervisor,
          hosts,
-         %% spawned slaves
-         slaves
+         clients=ordsets:new() % all clients that used this pipe.
         }).
+
 -type master() :: #master{exe::exe(),
                           hosts::[{node(),non_neg_integer()}],
-                          slaves::[{node(),pid()}]}.
+                          supervisor::pid()
+                         }.
 
 -record(slave,
         {id, % unix pid
          pid, % erlang pid
          port,
+         seq, % master's sequence number
          timeout=5000
         }).
 
