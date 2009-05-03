@@ -16,14 +16,50 @@ test() ->
 piperl_slave_test() ->
   {ok,Slave}=piperl_slave:start_link(echo_exe()),
   Bin = <<"slave test">>,
-  Msg = echo_msg(Bin),
-  piperl_slave:send(Slave,Msg),
-  piperl_slave:send(Slave,Msg),
-  piperl_slave:send(Slave,Msg),
-  Rs = get_msgs(),
-  ?assertEqual(3,  length(Rs)),
-  [begin ?assertMatch(Bin,Bin2) end || {_From,Bin2} <- get_msgs()],
-  shutdown(Slave).
+  Rs = msg_slaves([Slave,Slave,Slave],Bin),
+  ?assertEqual(3,length(Rs)),
+  [begin ?assertMatch(Bin,Bin2) end || {_From,Bin2} <- Rs],
+  shutdown(Slave),
+  {ok,Slave2}=piperl_slave:start_link(echo_exe()),
+  %% try failure
+  try
+    unlink(Slave2),
+    ?debugMsg("Expects Error"),
+    piperl_slave:send(Slave2,echo_msg(<<"fail">>,100)),
+    ?assertMatch([{error,epipe}],get_msgs(200)),
+    %% Slave2 should be dead
+    ?assertExit(_,piperl_slave:send(Slave2,echo_msg()))
+    after
+      catch shutdown(Slave2)
+    end,
+  {ok,Slave3}=piperl_slave:start_link(echo_exe()),
+  %% timeout
+  try
+    unlink(Slave3),
+    ?debugMsg("Expects Error"),
+    piperl_slave:send(Slave3,echo_msg(<<"timeout">>,100)),
+    ?assertMatch([{error,timeout}],get_msgs(200)),
+    %% Slave3 should be dead
+    ?assertExit(_,piperl_slave:send(Slave3,echo_msg()))
+    after
+      catch shutdown(Slave3)
+    end,
+  %% success once, then die
+  {ok,Slave4}=piperl_slave:start_link(echo_exe()),
+  try
+    unlink(Slave4),
+    ?debugMsg("Expects Error"),
+    piperl_slave:send(Slave4,echo_msg(<<"fail-after">>,100)),
+    ?assertMatch([{_,<<"swan-song">>}],get_msgs(200)),
+    %% by now, the process is dead
+    piperl_slave:send(Slave4,echo_msg(<<"encore">>)),
+    ?assertMatch([{error,epipe}],get_msgs(100)),
+    %% Slave4 should be dead
+    ?assertExit(_,piperl_slave:send(Slave4,echo_msg()))
+    after
+      catch shutdown(Slave4)
+    end,
+  ok.
 
 piperl_master_test() ->
   %% start three slave instances
@@ -80,6 +116,7 @@ piperl_tcp_server_test() ->
   piperl:open(Piperl,echo,echo_exe(),[{node(),1}]),
   TcpServer = piperl_tcp_server:start(9876,Piperl),
   link(TcpServer),
+  {ok,Timer} = timer:exit_after(10000,self(),tcp_timeout),
   {ok,Socket} = gen_tcp:connect("localhost",9876,[binary,{active,false}]),
   gen_tcp:send(Socket,<<"{'send'  'echo' 7~tcp_msg~}$\n\n\n  {'send' 'echo' \"tcp_msg2\"}$\n">>),
   {Bin,Excess} = piperl_util:decode_ubf_stream(
@@ -89,26 +126,32 @@ piperl_tcp_server_test() ->
                Excess),
   ?assertMatch({_From,<<"tcp_msg">>},parse_msg(Bin)),
   ?assertMatch({_From,<<"tcp_msg2">>},parse_msg(Bin2)),
+  timer:cancel(Timer),
   shutdown(Piperl).
 
 msg_slaves(Slaves,Bin) when is_list(Slaves) ->
-  Msg = echo_msg(Bin),
+  msg_slaves(Slaves,Bin,100).
+msg_slaves(Slaves,Bin,Wait) when is_list(Slaves), is_integer(Wait) ->
+  Msg = echo_msg(Bin,Wait), %% stipulates that this particular message timeouts after Wait.
   [piperl_slave:send(Slave,Msg) || Slave <- Slaves],
-  get_msgs().
+  get_msgs(Wait).
 
 get_msgs() ->
-  timer:sleep(100),
-  get_msgs([]).
-get_msgs(Acc) ->
-  case get_msg() of
+  get_msgs(100).
+get_msgs(Wait) when is_integer(Wait) ->
+  timer:sleep(Wait),
+  collect_msgs([]).
+collect_msgs(Acc) ->
+  case collect_msg() of
     none -> Acc;
-    R -> get_msgs([R|Acc])
+    R -> collect_msgs([R|Acc])
   end.
 
--spec get_msg() -> {string(),string()} | none.
-get_msg() ->
+-spec collect_msg() -> {string(),string()} | none.
+collect_msg() ->
   receive
-    {slave_out,#msg{data=Bin}} -> parse_msg(Bin)
+    {out,#msg{data=Bin}} -> parse_msg(Bin);
+    {out,#err_msg{reason=R}} -> {error,R}
   after 0 -> none
   end.
 
@@ -123,7 +166,9 @@ echo_exe() ->
 echo_msg() ->
   echo_msg(<<"echo msg">>).
 echo_msg(Bin) ->
-  #msg{handler=self(),data=Bin}.
+  echo_msg(Bin,100).
+echo_msg(Bin,Timeout) ->
+  #msg{handler=self(),data=Bin,timeout=Timeout}.
 
 shutdown(Pid) ->
   unlink(Pid),

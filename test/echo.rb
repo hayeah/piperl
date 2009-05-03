@@ -12,9 +12,7 @@ class Piperl
 
   def each
     while data = self.read
-      trace "read: #{data}"
       data = yield(data)
-      trace "write: #{data}"
       write(data)
     end
   end
@@ -46,6 +44,7 @@ class Piperl
 
     expect ?~
     expect ?$
+    trace "read: #{data}"
     return data
   end
 
@@ -55,6 +54,7 @@ class Piperl
 
   def write(data)
     data = "#{Process.pid}==#{data.to_s}"
+    trace "write: #{data}"
     @o << data.size
     @o.putc ?~
     @o << data
@@ -65,6 +65,17 @@ class Piperl
 end
 
 i = 0
-Piperl.new($stdin,$stdout).each do |data|
-  data
+piperl = Piperl.new($stdin,$stdout)
+piperl.each do |data|
+  case data
+  when "fail"
+    Kernel.exit(0)
+  when "fail-after"
+    piperl.write("swan-song")
+    Kernel.exit(0)
+  when "timeout"
+    sleep(10000) # go to sleep, baby
+  else
+    data # echo
+  end
 end

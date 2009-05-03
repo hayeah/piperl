@@ -31,27 +31,32 @@
 -record(slave,
         {id, % unix pid
          pid, % erlang pid
-         port,
-         seq, % master's sequence number
-         timeout=5000
+         processor % pid of slave's work queue
         }).
 
+-record(slave_processor,
+        {port,
+         msg, %% message currently being processed
+         timeout=5000 %% default timeout for slave. Could be overriden by msg timeout.
+        }).
 
 %% message within pipe
 -record(msg,
         {data, %% binary payload delivered to external process as UBF binary
-         token, %% a token to identify the meesage
-         handler %% where to send back result
+         handler, %% where to send back result
+         timeout, %% overrides default slave timeout
+         seq %% sequence number to uniquely identify a message for a client
         }).
+
+-record(err_msg,
+        {token,
+         seq,
+         reason, 
+         retry=false %% piperl client would retry if this is true
+        }).
+
+-record(sync,{token,seq}).
 
 -type msg() :: #msg{data::binary()}.
 
-%% types of piperl messages at the interface
-%% data message
--record(pipe_data,{data}).
-%% meta messages
--record(pipe_ok,{}).
--record(pipe_call,{data,token}).
--record(pipe_sync,{token}).
--record(pipe_error,{reason,detail,data}).
-
+%%

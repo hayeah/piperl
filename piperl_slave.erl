@@ -22,55 +22,103 @@
 start_link(Exe=#exe{}) ->
   gen_server:start_link(?MODULE,[Exe],[]).
 
-send(SlavePid,Msg) when is_record(Msg,msg) ->
-  gen_server:cast(SlavePid,{slave_in,Msg}).
+-spec send(pid(),msg()) -> 'ok' | {'error',_}.
+send(SlavePid,Msg=#msg{data=Bin}) when is_binary(Bin) ->
+  gen_server:call(SlavePid,{slave_in,Msg}).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% gen_server callbacks
 
+%% CONTRACT: spawned unix process should exit on broken pipe
+%%
+%% The process loop is used to prevent the
+%% piperl_slave gen_server instance from
+%% blocking. The loop itself processes each
+%% message sequentially. (Should prevent blocking,
+%% because we want slave to acknowledge receipt of
+%% message).
 init([Exe]) ->
-  %% spawned unix process should exit on broken pipe
-  Port = open_port({spawn,Exe#exe.bin},[stream,binary]),
-  {ok,#slave{port=Port,pid=self()}}.
+  P = spawn_link(
+        fun () ->
+            Port = open_port({spawn,Exe#exe.bin},[stream,binary]),
+            process_loop(#slave_processor{port=Port})
+        end),
+  {ok,#slave{pid=self(),processor=P}}.
 
-handle_cast({slave_in,Msg=#msg{data=Data,handler=Handler}},S) ->
-  write(S,Data),
-  R = read(S), %% blocks
-  Handler ! {slave_out,Msg#msg{data=R}},
-  {noreply,S}.
+handle_call({slave_in,Msg=#msg{}},_From,S) ->
+  S#slave.processor ! Msg,
+  {reply,ok,S}.
 
-handle_call(_,_,_) ->
+handle_cast(_,_) ->
   exit(undefined).
 
 handle_info(_,_) ->
   exit(undefined).
 
-terminate(Reason,S) ->
-  port_close(S#slave.port),
+terminate(Reason,_S) ->
   exit(Reason).
 
 code_change(_OldVsn,S,_Extra) ->
   {ok,S}.
 
+process_loop(P) ->
+  receive
+    Msg=#msg{handler=Handler,data=Bin,timeout=MsgTimeout} ->
+      %% if the message specifies a timeout, use that.
+      Timeout = case MsgTimeout of
+                  undefined -> P#slave_processor.timeout;
+                  _ -> MsgTimeout
+                end,
+      %% augment processor with the current message being processed. Throw away later.
+      P2 = P#slave_processor{msg=Msg},
+      write(P2,Bin),
+      R = case read(P2,Timeout) of
+            %% this is an error message the slave produced
+            {error,Reason} -> #err_msg{reason=Reason,seq=Msg#msg.seq};
+            RBin -> Msg#msg{data=RBin}
+          end,
+      reply(Handler,R)
+  end,
+  process_loop(P).
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Internal Functions
 
-write(S,Data) when is_list(Data) or is_binary(Data) ->
-  Bin = iolist_to_binary(Data),
+write(P,Bin) when is_binary(Bin) ->
   %% data disappears if port is closed (which is fine)
-  erlang:port_command(S#slave.port,ubf:encode(Bin)).
+  Port = P#slave_processor.port,
+  try
+    erlang:port_command(Port,ubf:encode(Bin))
+  catch error:badarg -> die(P,epipe)
+  end.
 
-read(S) ->
-  case piperl_util:decode_ubf_stream(fun () -> receive_bin(S) end) of
+read(P,Timeout) ->
+  case piperl_util:decode_ubf_stream(fun () -> receive_bin(P,Timeout) end) of
     {Data,[]} -> Data;
     {Data,LeftOver} -> erlang:error({left_over,Data,LeftOver})
   end.
 
-receive_bin(S) ->
-  Port = S#slave.port,
+receive_bin(P,Timeout) ->
+  Port = P#slave_processor.port,
   receive
-    {Port,{data,Bin}} -> Bin;
-    {Port,closed} -> erlang:error(port_closed)
-  after S#slave.timeout -> erlang:error(timeout)
+    {Port,{data,Bin}} -> Bin
+  after Timeout ->
+      %% can't know if we are timing out because pipe is broken. Try to close it.
+      try port_close(Port)
+      catch error:badarg -> die(P,epipe)
+      end,
+      die(P,timeout)
   end.
+
+die(P,Reason) ->
+  #msg{handler=Handler,seq=Seq} = P#slave_processor.msg,
+  reply(Handler,#err_msg{reason=Reason,seq=Seq}),
+  %% TODO flush pending messages in mailbox
+  %% %% pending messages should be retried.
+  %% flush_pending(),
+  erlang:error(Reason).
+
+reply(Handler,Term) ->
+  Handler ! {out,Term}.

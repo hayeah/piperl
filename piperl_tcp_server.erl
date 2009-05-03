@@ -48,7 +48,7 @@ socket_read_loop(Sock,SocketWriter,Client,LeftOver) ->
       Bin =
         case Data of
           {'#S',Str} -> iolist_to_binary(Str);
-          B -> B
+          B when is_binary(B) -> B
         end,
       piperl_client:send(Client,Name,#msg{data=Bin,handler=SocketWriter})
   end,
@@ -56,7 +56,7 @@ socket_read_loop(Sock,SocketWriter,Client,LeftOver) ->
 
 socket_write_loop(Sock) ->
   receive
-    {slave_out,#msg{data=Bin}} ->
+    {out,#msg{data=Bin}} ->
       gen_tcp:send(Sock,ubf:encode(Bin)),
       socket_write_loop(Sock)
   end.

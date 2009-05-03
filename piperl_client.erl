@@ -53,7 +53,8 @@ handle_call({send,PipeName,Msg},_From,S) ->
 handle_cast(_,_) ->
   exit(undefined).
 
-handle_info({slave_out,Msg=#msg{handler=Handler}},S) ->
+handle_info({out,Msg=#msg{handler=Handler}},S) ->
+  %% TODO intercept err_msg here
   Handler ! Msg,
   {noreply,S}.
 
